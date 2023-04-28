@@ -16,6 +16,7 @@ function constructArrays(R,D,v,mu,Gamma,omega,sigma,xF,xC)
 	idxGrid::StepRangeLen{Int64} = 1:P
 	idxStore::StepRangeLen{Int64} = 1:P
 
+	# Concatenate local iteration matrices in a single block diagonal matrix
 	for m in 1:M-1
 
 		idxGrid = (m-1)*(P-1)+1:m*(P-1)+1;

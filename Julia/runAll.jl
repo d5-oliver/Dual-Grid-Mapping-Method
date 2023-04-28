@@ -6,6 +6,12 @@ include("IM.jl")
 include("DM.jl")
 include("par.jl")
 
+# Execute the runAll() function to generate results for the fine-grid solution method and the dual-grid mapping method (IM and DM).
+# Edit values here and in par.jl to modify test problems.
+# Set testCase = 1, 2, ..., 6 to pick a test problem.
+# Set plotFigs = true to plot the results.
+# Please note: Plot output is saved to the current directory.
+
 function runAll()
 
     x0::Float64 = 0
@@ -38,13 +44,17 @@ function runAll()
         plot!(parVals.xF,c_IM[:,parVals.tSteps], lw=3, lc=:red, ls=:dash, label="")
         xlabel!(L"x")
         ylabel!(L"$c_i^{(k)}, \widetilde{c}_i^{(k)}, C_m^{(k)}$")
-        display(scatter!(parVals.xC, C_IM[:,parVals.tSteps], lw=3, markerstrokewidth=3, markerstrokecolor=:red, mc=:red, lc=:red, ls=:dot, label=""))
+        scatter!(parVals.xC, C_IM[:,parVals.tSteps], lw=3, markerstrokewidth=3, markerstrokecolor=:red, mc=:red, lc=:red, ls=:dot, label="")
+
+        savefig("IM_Comparison.png")
 
         plot(parVals.xF,c_FVM[:,parVals.tSteps], lw=3, lc=:gray, label="", legend=false)
         plot!(parVals.xF,c_DM[:,parVals.tSteps], lw=3, lc=:blue, ls=:dash, label="")
         xlabel!(L"x")
         ylabel!(L"$c_i^{(k)}, \widetilde{c}_i^{(k)}, C_m^{(k)}$")
-        display(scatter!(parVals.xC, C_DM[:,parVals.tSteps], lw=3, markerstrokewidth=3, markerstrokecolor=:blue, mc=:blue, lc=:blue, ls=:dot, label=""))
+        scatter!(parVals.xC, C_DM[:,parVals.tSteps], lw=3, markerstrokewidth=3, markerstrokecolor=:blue, mc=:blue, lc=:blue, ls=:dot, label="")
+
+        savefig("DM_Comparison.png")
 
         local plotInterval = 0:0.05:0.125
         local numEntries = length(plotInterval)
@@ -62,7 +72,9 @@ function runAll()
         annotate!(0.3, 0.25, "Fine-Grid DM solution")
 
         scatter!([0.05], [0], mode="markers", name="", markerstyle=:dot, markerstrokewidth=3, markercolor=:blue, markerstrokecolor=:blue)
-        display(annotate!(0.3, 0, "Coarse-Grid DM solution"))
+        annotate!(0.3, 0, "Coarse-Grid DM solution")
+
+        savefig("Legend.png")
 
     end
 

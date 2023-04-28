@@ -2,6 +2,7 @@ using LinearAlgebra
 
 include("fvmStd.jl")
 
+# Construct mapping matrix by linear interpolation [Equation 13]
 function interpG(N,xF,M,xC)
 
 	G::Array{Float64} = zeros(N,M)
@@ -23,6 +24,7 @@ end
 
 function IM(par)
 
+	# Transport coefficients and problem parameters
 	x0::Float64 = par.x0
 	xL::Float64 = par.xL
 
@@ -54,9 +56,11 @@ function IM(par)
 	sigmaL::Float64 = par.sigmaL
 	gL::Any = par.gL(t)
 
+	# Construct the mapping matrix G [Equation 13]
     G::Array{Float64} = interpG(N,xF,M,xC)
     GT::Array{Float64} = transpose(G)
 
+	# Construct the iteration matrix A [Equation 7] and vector b [Equation 8]
 	A::Array{Float64}, b::Array{Float64} = fvmStd(xF,R,D,v,mu,Gamma,omega,alpha0,beta0,sigma0,alphaL,betaL,sigmaL)
 	itMatFull::Array{Float64} = I - tau*A
 
@@ -68,6 +72,7 @@ function IM(par)
     val0::Float64 = Gamma(x0)/R(x0)
 	valL::Float64 = Gamma(xL)/R(xL)
 
+	# Construct the coarse-grid iteration matrix [Equation 15]
 	itMatCoarse::Array{Float64} = GT * itMatFull * G
 
     c::Array{Float64} = zeros(N,K+1)
@@ -76,13 +81,16 @@ function IM(par)
 	C::Array{Float64} = zeros(M,K+1)
 	C[:,1] = par.c0(xC)
 
+	# Time stepping
     for k in 1:K
 
         b[1] = tau*(b0*g0[k+1] + val0)
         b[N] = tau*(bL*gL[k+1] + valL)
 
+		# Approximate solution on the coarse grid [Equation 15]
         C[:,k+1] = itMatCoarse \ (GT * (c[:,k] + b))
 
+		# Reconstruct solution on the fine grid [Equation 14]
         c[:,k+1] = G * C[:,k+1]
 
     end

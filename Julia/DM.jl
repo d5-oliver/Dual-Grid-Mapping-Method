@@ -5,6 +5,7 @@ include("fvmSig.jl")
 
 function constructG(M,P,totalNodes,tau,itMatLocal,dm)
 
+	# Construct the mapping matrix G [Equation 25]
 	Gm::Array{Float64} = zeros(totalNodes,M)
 
 	idxStore::StepRangeLen{Int64} = 0:0
@@ -12,8 +13,6 @@ function constructG(M,P,totalNodes,tau,itMatLocal,dm)
 	for m in 1:M-1
 
 		idxStore = (m-1)*P+1:m*P
-
-		#Gm[idxStore,[m,m+1]] = view(itMatLocal,idxStore,idxStore) \ (tau * [dm[1:P,m] dm[2:P+1,m]])
 
 		Gm[idxStore,[m,m+1]] = itMatLocal[idxStore,idxStore] \ (tau * [dm[1:P,m] dm[2:P+1,m]])
 
@@ -25,6 +24,7 @@ end
 
 function constructPhi(M,P,tau,itMatLocal,bm,c,phim)
 
+	# Construct the phi vector [Equation 26]
 	idxGrid::StepRangeLen{Int64} = 0:0
 	idxStore::StepRangeLen{Int64} = 0:0
 
@@ -35,8 +35,6 @@ function constructPhi(M,P,tau,itMatLocal,bm,c,phim)
 
 		phim[idxStore] = itMatLocal[idxStore,idxStore] \ (c[idxGrid] .+ tau*bm[:,m])
 
-		#phim[idxStore] = itMatLocal[idxStore,idxStore] \ (c[idxGrid] .+ tau*bm[:,m])
-
 	end
 
 	return phim
@@ -45,6 +43,7 @@ end
 
 function DM(par)
 
+	# Transport coefficients and problem parameters
 	x0::Float64 = par.x0
 	xL::Float64 = par.xL
 
@@ -80,9 +79,11 @@ function DM(par)
 	sigmaL::Float64 = par.sigmaL
 	gL::Any = par.gL(t)
 
+	# Construct the iteration matrix A [Equation 7] and vector b [Equation 8]
 	A::Array{Float64}, b::Array{Float64} = fvmStd(xF,R,D,v,mu,Gamma,omega,alpha0,beta0,sigma0,alphaL,betaL,sigmaL)
 	itMatFull::Array{Float64} = I - tau*A
 
+	# Construct the iteration matrices A [Equation 21] and vectors b [Equation 23] corresponding to locally defined sub-problems [Equations 16-19]
 	Am::Array{Float64}, bm::Array{Float64}, dm::Array{Float64} = constructArrays(R,D,v,mu,Gamma,omega,sigma,xF,xC)
 	itMatLocal::Array{Float64} = I - tau*Am
 
@@ -96,6 +97,7 @@ function DM(par)
 
 	idx::Array{Int64} = setdiff(1:totalNodes, (1:M-2)*P.+1)
 
+	# Construct the mapping matrix G [Equation 25]
 	Gm::Array{Float64} = constructG(M,P,totalNodes,tau,itMatLocal,dm)
 	Gm = Gm[idx,:]
 	GmT::Array{Float64} = transpose(Gm)
@@ -110,15 +112,19 @@ function DM(par)
 
 	phim::Array{Float64} = zeros(totalNodes)
 
+	# Time stepping
 	for k in 1:K
 
+		# Construct the phi vector [Equation 26]
 		phim = constructPhi(M,P,tau,itMatLocal,bm,c[:,k],phim)
 
 		b[1] = tau * (b0*g0[k+1] + val0)
 		b[N] = tau * (bL*gL[k+1] + valL)
 
+		# Approximate solution on the coarse grid [Equation 12]
 		C[:,k+1] = itMatCoarse \ (GmT * (c[:,k] - itMatFull*phim[idx] + b))
 
+		# Reconstruct solution on the fine grid [Equation 11]
 		c[:,k+1] = Gm * C[:,k+1] + phim[idx]
 
 	end

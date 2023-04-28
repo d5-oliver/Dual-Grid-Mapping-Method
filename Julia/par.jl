@@ -40,12 +40,14 @@ struct par
 
 end
 
+# Basic Heaviside step function.
 function heaviside(x)
 
 	return .!(x .< 0)
 
 end
 
+# Basic piecewise-constant function.
 function layerEval(x::Any, layers::Array{Float64}, parcol::Int64)
 
 	local y::Union{Int64,Float64,Array{Float64}}
@@ -72,6 +74,11 @@ function layerEval(x::Any, layers::Array{Float64}, parcol::Int64)
 
 end
 
+# Set test problem values.
+# Cases 1 and 2 were defined from test problems used in:
+# Carr, E.J. 2020. New semi-analytical solutions for advection-dispersion 
+# equations in multilayer porous media. Transport in Porous Media, 
+# 135(1):pp. 39–58. https://dx.doi.org/10.1007/s11242-020-01468-z.
 function constructPar(x0::Float64, xL::Float64, T::Float64, N::Int64=1001, M::Int64=11, K::Int64=3600, omega::Int64=1, sigma::Float64=1e+10, testCase::Int64=1)
 
 	local layers::Array{Float64}

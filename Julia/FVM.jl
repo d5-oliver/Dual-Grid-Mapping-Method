@@ -4,6 +4,7 @@ include("fvmStd.jl")
 
 function FVM(par)
 
+	# Transport coefficients and problem parameters
 	x0::Int64 = par.x0
 	xL::Int64 = par.xL
 	N::Int64 = par.N
@@ -31,6 +32,7 @@ function FVM(par)
 	sigmaL::Float64 = par.sigmaL
 	gL::Any = par.gL(t)
 
+	# Construct the iteration matrix A [Equation 7] and vector b [Equation 8]
 	A::Array{Float64}, b::Array{Float64} = fvmStd(xF,R,D,v,mu,Gamma,omega,alpha0,beta0,sigma0,alphaL,betaL,sigmaL)
 	itMat::Array{Float64} = I - tau*A
 
@@ -45,11 +47,13 @@ function FVM(par)
 	c::Array{Float64} = zeros(N,K+1)
 	c[:,1] = par.c0(xF)
 
+	# Time stepping
 	for k in 1:K
 
 		b[1] = tau * (b0*g0[k+1] + val0)
 		b[N] = tau * (bL*gL[k+1] + valL)
 
+		# Approximate solution on the fine grid [Equation 9]
 		c[:,k+1] = itMat \ (c[:,k] + b)
 
 	end
