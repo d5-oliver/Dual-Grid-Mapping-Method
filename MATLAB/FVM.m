@@ -53,14 +53,14 @@ val0 = Gamma(xF(1)) / R(xF(1));
 valL = Gamma(xF(N)) / R(xF(N));
 
 % Time stepping
-for kk = 1:K
+for k = 1:K
 
-    b(1) = tau * (b0*g0(kk+1) + val0);
+    b(1) = tau * (b0*g0(k+1) + val0);
 
-    b(N) = tau * (bL*gL(kk+1) + valL);
+    b(N) = tau * (bL*gL(k+1) + valL);
     
     % Approximate solution on the fine grid [Equation 9]
-    c(:,kk+1) = itMat \ ( c(:,kk) + b );
+    c(:,k+1) = itMat \ ( c(:,k) + b );
 
 end
 
