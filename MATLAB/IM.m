@@ -62,17 +62,17 @@ valL = Gamma(xF(N)) / R(xF(N));
 itMat = G' * (I - tau*A) * G;
 
 % Time stepping
-for kk = 1:K
+for k = 1:K
 
-    b(1) = tau * (b0*g0(kk+1) + val0);
+    b(1) = tau * (b0*g0(k+1) + val0);
 
-    b(N) = tau * (bL*gL(kk+1) + valL);
+    b(N) = tau * (bL*gL(k+1) + valL);
 
     % Approximate solution on the coarse grid [Equation 15]
-    C(:,kk+1) = itMat \ ( G' * ( c(:,kk) + b ) );
+    C(:,k+1) = itMat \ ( G' * ( c(:,k) + b ) );
 
     % Reconstruct solution on the fine grid [Equation 14]
-    c(:,kk+1) = G * C(:,kk+1);
+    c(:,k+1) = G * C(:,k+1);
 
 end
 
