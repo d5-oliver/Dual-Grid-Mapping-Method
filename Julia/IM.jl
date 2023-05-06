@@ -5,18 +5,17 @@ include("fvmStd.jl")
 # Construct mapping matrix by linear interpolation [Equation 13]
 function interpG(N,xF,M,xC)
 
-	G::Array{Float64} = zeros(N,M)
-    P::Int64 = (N-1)/(M-1) + 1
-    idx::StepRangeLen{Int64} = 0:0
+	G = zeros(N,M)
+	P = div(N-1,M-1) + 1
 
-    for m in 1:M-1
+	for m in 1:M-1
 
-        idx = (m-1)*(P-1)+1:m*(P-1)+1
+		idx = (m-1)*(P-1)+1:m*(P-1)+1
 
-        G[idx,m] = (xC[m+1] .- xF[idx]) ./ (xC[m+1] .- xC[m])
-        G[idx,m+1] = (xF[idx] .- xC[m]) ./ (xC[m+1] .- xC[m])
+		G[idx,m] .= (xC[m+1] .- xF[idx]) ./ (xC[m+1] .- xC[m])
+		G[idx,m+1] .= (xF[idx] .- xC[m]) ./ (xC[m+1] .- xC[m])
 
-    end
+	end
 
 	return G
 
@@ -25,75 +24,87 @@ end
 function IM(par)
 
 	# Transport coefficients and problem parameters
-	x0::Float64 = par.x0
-	xL::Float64 = par.xL
+	x0 = par.x0
+	xL = par.xL
 
-	N::Int64 = par.N
-	M::Int64 = par.M
+	N = par.N
+	M = par.M
 
-	xF::StepRangeLen{Float64} = par.xF
-	xC::StepRangeLen{Float64} = par.xC
-	
-	tau::Float64 = par.tau
-	t::StepRangeLen{Float64} = par.t
-	K::Int64 = par.K
+	xF = par.xF
+	xC = par.xC
 
-	R::Any = par.R
-	D::Any = par.D
-	v::Any = par.v
-	mu::Any = par.mu
-	Gamma::Any = par.Gamma
+	tau = par.tau
+	t = par.t
+	K = par.K
 
-	omega::Int64 = par.omega
+	R = par.R
+	D = par.D
+	v = par.v
+	mu = par.mu
+	Gamma = par.Gamma
 
-	alpha0::Float64 = par.alpha0
-	beta0::Float64 = par.beta0
-	sigma0::Float64 = par.sigma0
-	g0::Any = par.g0(t)
+	omega = par.omega
 
-	alphaL::Float64 = par.alphaL
-	betaL::Float64 = par.betaL
-	sigmaL::Float64 = par.sigmaL
-	gL::Any = par.gL(t)
+	alpha0 = par.alpha0
+	beta0 = par.beta0
+	sigma0 = par.sigma0
+	g0 = par.g0(t)
+
+	alphaL = par.alphaL
+	betaL = par.betaL
+	sigmaL = par.sigmaL
+	gL = par.gL(t)
 
 	# Construct the mapping matrix G [Equation 13]
-    G::Array{Float64} = interpG(N,xF,M,xC)
-    GT::Array{Float64} = transpose(G)
+	G = interpG(N,xF,M,xC)
+	GT = transpose(G)
 
 	# Construct the iteration matrix A [Equation 7] and vector b [Equation 8]
-	A::Array{Float64}, b::Array{Float64} = fvmStd(xF,R,D,v,mu,Gamma,omega,alpha0,beta0,sigma0,alphaL,betaL,sigmaL)
-	itMatFull::Array{Float64} = I - tau*A
+	A, b = fvmStd(xF,R,D,v,mu,Gamma,omega,alpha0,beta0,sigma0,alphaL,betaL,sigmaL)
+	itMatFull = I - tau*A
 
-	b0::Float64 = b[1]
-	bL::Float64 = b[N]
-
-	b[2:N-1] = tau*b[2:N-1]
-
-    val0::Float64 = Gamma(x0)/R(x0)
-	valL::Float64 = Gamma(xL)/R(xL)
+	# Pre-allocate the b vectors for use in the time-stepping loop
+	bval = zeros(N,K+1)
+	bval[1,:] .= tau .* (b[1] .* g0 .+ Gamma(x0) / R(x0))
+	bval[N,:] .= tau .* (b[N] .* gL .+ Gamma(xL) / R(xL))
+	@views @inbounds for k in 1:K
+		bval[2:N-1,k] .= tau .* b[2:N-1]
+	end
 
 	# Construct the coarse-grid iteration matrix [Equation 15]
-	itMatCoarse::Array{Float64} = GT * itMatFull * G
+	itMatCoarse = GT * itMatFull * G
+	itMatCoarse = lu(itMatCoarse)
 
-    c::Array{Float64} = zeros(N,K+1)
+	# Pre-allocate full Nx1 solutions
+	c = zeros(N,K+1)
 	c[:,1] = par.c0(xF)
 
-	C::Array{Float64} = zeros(M,K+1)
+	# Pre-allocate coarse Mx1 solutions
+	C = zeros(M,K+1)
 	C[:,1] = par.c0(xC)
 
-	# Time stepping
-    for k in 1:K
+	# Pre-allocate RHS vectors for the full (stepTmpbFull) NxN problem, and the coarse (stepTmpbCoarse) MxM problem
+	stepTmpbFull = similar(xF)
+	stepTmpbCoarse = similar(xC)
 
-        b[1] = tau*(b0*g0[k+1] + val0)
-        b[N] = tau*(bL*gL[k+1] + valL)
+	# Time stepping
+	for k in 1:K
+
+		# Construct the full Nx1 RHS vector
+		stepTmpbFull .= c[:,k]
+		stepTmpbFull .+= bval[:,k+1]
+
+		# Construct the coarse Mx1 RHS vector
+		stepTmpbCoarse .= GT * stepTmpbFull
 
 		# Approximate solution on the coarse grid [Equation 15]
-        C[:,k+1] = itMatCoarse \ (GT * (c[:,k] + b))
+		ldiv!(itMatCoarse,stepTmpbCoarse)
+		C[:,k+1] .= stepTmpbCoarse
 
 		# Reconstruct solution on the fine grid [Equation 14]
-        c[:,k+1] = G * C[:,k+1]
+		c[:,k+1] .= G * C[:,k+1]
 
-    end
+	end
 
 	return c, C
 

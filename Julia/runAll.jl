@@ -4,6 +4,7 @@ using LaTeXStrings
 include("FVM.jl")
 include("IM.jl")
 include("DM.jl")
+include("layers.jl")
 include("par.jl")
 
 # Execute the runAll() function to generate results for the fine-grid solution method and the dual-grid mapping method (IM and DM).
@@ -14,69 +15,85 @@ include("par.jl")
 
 function runAll()
 
-    x0::Float64 = 0
-    xL::Float64 = 30
+	testCase = 5
 
-    N::Int64 = 101
-    M::Int64 = 11
+	layers = setLayers(testCase)
 
-    T::Float64 = 18
-    K::Int64 = 3600
+	x0 = 0.0
+	xL = 30.0
 
-    omega::Int64 = 1
-    sigma::Float64 = 1e+10
+	N = 3601
+	xF = x0:(xL-x0)/(N-1):xL
+	# If test case is a layered problem, ensure a node is placed on interfaces
+	if testCase in [1,2,3,4]
+		while !isempty(setdiff(layers[2:end-1,1],xF))
+			N += 1
+			xF = x0:(xL-x0)/(N-1):xL
+		end
+	end
 
-    testCase::Int64 = 6
+	M = 11
+	# Ensure coarse grid is a subset of fine grid nodes.
+	while mod( (N-1)/(M-1) , 1 ) > 0
+		M += 1;
+	end
+	xC = x0:(xL-x0)/(M-1):xL
+	
+	T = 18.0
+	K = 3600
 
-    plotFigs::Bool = true
+	omega = 1.0
+	sigma = 1.0e+10
 
-    parVals::Any = constructPar(x0,xL,T,N,M,K,omega,sigma,testCase)
+	plotFigs = true
 
-    c_FVM::Array{Float64} = FVM(parVals)
-    c_IM::Array{Float64}, C_IM::Array{Float64} = IM(parVals)
-    c_DM::Array{Float64}, C_DM::Array{Float64} = DM(parVals)
+	parVals = constructPar(x0,xL,T,N,xF,M,xC,K,omega,sigma,testCase,layers)
 
-    if plotFigs
+	c_FVM = FVM(parVals)
+	c_IM, C_IM = IM(parVals)
+	c_DM, C_DM = DM(parVals)
 
-        gr(size=(800,600), xtickfontsize=13, ytickfontsize=13, xguidefontsize=20, yguidefontsize=24, legendfontsize=16, dpi=100)
+	if plotFigs
 
-        plot(parVals.xF, c_FVM[:,parVals.tSteps], lw=3, lc=:gray, label="", legend=false)
-        plot!(parVals.xF,c_IM[:,parVals.tSteps], lw=3, lc=:red, ls=:dash, label="")
-        xlabel!(L"x")
-        ylabel!(L"$c_i^{(k)}, \widetilde{c}_i^{(k)}, C_m^{(k)}$")
-        scatter!(parVals.xC, C_IM[:,parVals.tSteps], lw=3, markerstrokewidth=3, markerstrokecolor=:red, mc=:red, lc=:red, ls=:dot, label="")
+		gr(size=(800,600), xtickfontsize=13, ytickfontsize=13, xguidefontsize=20, yguidefontsize=24, legendfontsize=16, dpi=100)
 
-        savefig("IM_Comparison.png")
+		plot(parVals.xF, c_FVM[:,parVals.tSteps], lw=3, lc=:gray, label="", legend=false)
+		plot!(parVals.xF,c_IM[:,parVals.tSteps], lw=3, lc=:red, ls=:dash, label="")
+		xlabel!(L"x")
+		ylabel!(L"$c_i^{(k)}, \widetilde{c}_i^{(k)}, C_m^{(k)}$")
+		scatter!(parVals.xC, C_IM[:,parVals.tSteps], lw=3, markerstrokewidth=3, markerstrokecolor=:red, mc=:red, lc=:red, ls=:dot, label="")
 
-        plot(parVals.xF,c_FVM[:,parVals.tSteps], lw=3, lc=:gray, label="", legend=false)
-        plot!(parVals.xF,c_DM[:,parVals.tSteps], lw=3, lc=:blue, ls=:dash, label="")
-        xlabel!(L"x")
-        ylabel!(L"$c_i^{(k)}, \widetilde{c}_i^{(k)}, C_m^{(k)}$")
-        scatter!(parVals.xC, C_DM[:,parVals.tSteps], lw=3, markerstrokewidth=3, markerstrokecolor=:blue, mc=:blue, lc=:blue, ls=:dot, label="")
+		savefig("IM_Comparison.png")
 
-        savefig("DM_Comparison.png")
+		plot(parVals.xF,c_FVM[:,parVals.tSteps], lw=3, lc=:gray, label="", legend=false)
+		plot!(parVals.xF,c_DM[:,parVals.tSteps], lw=3, lc=:blue, ls=:dash, label="")
+		xlabel!(L"x")
+		ylabel!(L"$c_i^{(k)}, \widetilde{c}_i^{(k)}, C_m^{(k)}$")
+		scatter!(parVals.xC, C_DM[:,parVals.tSteps], lw=3, markerstrokewidth=3, markerstrokecolor=:blue, mc=:blue, lc=:blue, ls=:dot, label="")
 
-        local plotInterval = 0:0.05:0.125
-        local numEntries = length(plotInterval)
+		savefig("DM_Comparison.png")
 
-        plot(plotInterval, repeat([1],numEntries), lw=3, lc=:gray, label="", showaxis=false, grid=false, legend=false, xlims=(0,1), ylims=(-0.25,1.25))
-        annotate!(0.3, 1, "Fine-Grid solution")
+		local plotInterval = 0:0.05:0.125
+		local numEntries = length(plotInterval)
 
-        plot!(plotInterval, repeat([0.75],numEntries), lw=3, lc=:red, ls=:dash, label="", grid=false, legend=false)
-        annotate!(0.3, 0.75, "Fine-Grid IM solution")
+		plot(plotInterval, repeat([1],numEntries), lw=3, lc=:gray, label="", showaxis=false, grid=false, legend=false, xlims=(0,1), ylims=(-0.25,1.25))
+		annotate!(0.3, 1, "Fine-Grid solution")
 
-        scatter!([0.05], [0.5], mode="markers", name="", markerstyle=:dot, markerstrokewidth=3, markercolor=:red, markerstrokecolor=:red)
-        annotate!(0.3, 0.5, "Coarse-Grid IM solution")
+		plot!(plotInterval, repeat([0.75],numEntries), lw=3, lc=:red, ls=:dash, label="", grid=false, legend=false)
+		annotate!(0.3, 0.75, "Fine-Grid IM solution")
 
-        plot!(plotInterval, repeat([0.25],numEntries), lw=3, lc=:blue, label="", grid=false, legend=false)
-        annotate!(0.3, 0.25, "Fine-Grid DM solution")
+		scatter!([0.05], [0.5], mode="markers", name="", markerstyle=:dot, markerstrokewidth=3, markercolor=:red, markerstrokecolor=:red)
+		annotate!(0.3, 0.5, "Coarse-Grid IM solution")
 
-        scatter!([0.05], [0], mode="markers", name="", markerstyle=:dot, markerstrokewidth=3, markercolor=:blue, markerstrokecolor=:blue)
-        annotate!(0.3, 0, "Coarse-Grid DM solution")
+		plot!(plotInterval, repeat([0.25],numEntries), lw=3, lc=:blue, label="", grid=false, legend=false)
+		annotate!(0.3, 0.25, "Fine-Grid DM solution")
 
-        savefig("Legend.png")
+		scatter!([0.05], [0], mode="markers", name="", markerstyle=:dot, markerstrokewidth=3, markercolor=:blue, markerstrokecolor=:blue)
+		annotate!(0.3, 0, "Coarse-Grid DM solution")
 
-    end
+		savefig("Legend.png")
+
+	end
 
 end
 

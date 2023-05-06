@@ -3,129 +3,157 @@ using LinearAlgebra
 include("fvmStd.jl")
 include("fvmSig.jl")
 
-function constructG(M,P,totalNodes,tau,itMatLocal,dm)
+# Create and store the LU factors of the locally defined iteration matrices (which are defined in [Equation 20])
+function luLocal(M,P,blockMat)
 
-	# Construct the mapping matrix G [Equation 25]
-	Gm::Array{Float64} = zeros(totalNodes,M)
+	itMatLU = Array{LU{Float64}}(undef,M-1,1)
 
-	idxStore::StepRangeLen{Int64} = 0:0
-
-	for m in 1:M-1
+	@views @inbounds for m in 1:M-1
 
 		idxStore = (m-1)*P+1:m*P
 
-		Gm[idxStore,[m,m+1]] = itMatLocal[idxStore,idxStore] \ (tau * [dm[1:P,m] dm[2:P+1,m]])
+		itMatLU[m] = lu(blockMat[idxStore,idxStore])
 
 	end
 
-	return Gm
-
-end
-
-function constructPhi(M,P,tau,itMatLocal,bm,c,phim)
-
-	# Construct the phi vector [Equation 26]
-	idxGrid::StepRangeLen{Int64} = 0:0
-	idxStore::StepRangeLen{Int64} = 0:0
-
-	for m in 1:M-1
-
-		idxGrid = (m-1)*(P-1)+1:m*(P-1)+1
-		idxStore = (m-1)*P+1:m*P
-
-		phim[idxStore] = itMatLocal[idxStore,idxStore] \ (c[idxGrid] .+ tau*bm[:,m])
-
-	end
-
-	return phim
+	return itMatLU
 
 end
 
 function DM(par)
 
 	# Transport coefficients and problem parameters
-	x0::Float64 = par.x0
-	xL::Float64 = par.xL
+	x0 = par.x0
+	xL = par.xL
 
-	N::Int64 = par.N
-	M::Int64 = par.M
-	P::Int64 = (N-1)/(M-1) + 1
-	totalNodes::Int64 = N + M - 2
+	N = par.N
+	M = par.M
+	P = div(N-1,M-1) + 1
+	totalNodes = N + M - 2
 
-	xF::StepRangeLen{Float64} = par.xF
-	xC::StepRangeLen{Float64} = par.xC
-	
-	tau::Float64 = par.tau
-	t::StepRangeLen{Float64} = par.t
-	K::Int64 = par.K
+	xF = par.xF
+	xC = par.xC
 
-	R::Any = par.R
-	D::Any = par.D
-	v::Any = par.v
-	mu::Any = par.mu
-	Gamma::Any = par.Gamma
+	tau = par.tau
+	t = par.t
+	K = par.K
 
-	omega::Int64 = par.omega
+	R = par.R
+	D = par.D
+	v = par.v
+	mu = par.mu
+	Gamma = par.Gamma
 
-	sigma::Float64 = par.sigma
+	omega = par.omega
 
-	alpha0::Float64 = par.alpha0
-	beta0::Float64 = par.beta0
-	sigma0::Float64 = par.sigma0
-	g0::Any = par.g0(t)
+	sigma = par.sigma
 
-	alphaL::Float64 = par.alphaL
-	betaL::Float64 = par.betaL
-	sigmaL::Float64 = par.sigmaL
-	gL::Any = par.gL(t)
+	alpha0 = par.alpha0
+	beta0 = par.beta0
+	sigma0 = par.sigma0
+	g0 = par.g0(t)
+
+	alphaL = par.alphaL
+	betaL = par.betaL
+	sigmaL = par.sigmaL
+	gL = par.gL(t)
 
 	# Construct the iteration matrix A [Equation 7] and vector b [Equation 8]
-	A::Array{Float64}, b::Array{Float64} = fvmStd(xF,R,D,v,mu,Gamma,omega,alpha0,beta0,sigma0,alphaL,betaL,sigmaL)
-	itMatFull::Array{Float64} = I - tau*A
+	A, b = fvmStd(xF,R,D,v,mu,Gamma,omega,alpha0,beta0,sigma0,alphaL,betaL,sigmaL)
+	itMatFull = I - tau*A
 
-	# Construct the iteration matrices A [Equation 21] and vectors b [Equation 23] corresponding to locally defined sub-problems [Equations 16-19]
-	Am::Array{Float64}, bm::Array{Float64}, dm::Array{Float64} = constructArrays(R,D,v,mu,Gamma,omega,sigma,xF,xC)
-	itMatLocal::Array{Float64} = I - tau*Am
+	# Pre-allocate the b vectors for use in the time-stepping loop
+	bval = zeros(N,K+1)
+	bval[1,:] .= tau .* (b[1] .* g0 .+ Gamma(x0) / R(x0))
+	bval[N,:] .= tau .* (b[N] .* gL .+ Gamma(xL) / R(xL))
+	@views @inbounds for k in 1:K
+		bval[2:N-1,k] .= tau .* b[2:N-1]
+	end
 
-	b0::Float64 = b[1]
-	bL::Float64 = b[N]
+	# Construct the iteration matrices A [Equation 21] and vectors b, u, and v [Equation 23] corresponding to locally defined sub-problems [Equations 16-19]
+	Am, bm, uvm = constructArrays(R,D,v,mu,Gamma,omega,sigma,xF,xC)
+	itMatLocal = I - tau*Am
+	itMatLocal = luLocal(M,P,itMatLocal)
 
-	b[2:N-1] = tau*b[2:N-1]
+	# Pre-allocate bm and uvm arrays for use with constructing mapping matrix G and vectors phi
+	bmVec = tau * bm
+	uvmVec = tau * uvm
 
-	val0::Float64 = Gamma(x0)/R(x0)
-	valL::Float64 = Gamma(xL)/R(xL)
+	# Set indices for the double-ups
+	idx = setdiff(1:totalNodes, (1:M-2)*P.+1)
 
-	idx::Array{Int64} = setdiff(1:totalNodes, (1:M-2)*P.+1)
+	# Pre-allocate temp arrays for use in constructing G and phi
+	rhsTmpGm = zeros(P,2)
+	rhsTmpPhim = zeros(P)
 
 	# Construct the mapping matrix G [Equation 25]
-	Gm::Array{Float64} = constructG(M,P,totalNodes,tau,itMatLocal,dm)
+	Gm = zeros(totalNodes,M)
+	@views @inbounds for m in 1:M-1
+
+		idxStore = (m-1)*P+1:m*P
+
+		rhsTmpGm .= uvmVec[:,:,m]
+		ldiv!(itMatLocal[m],rhsTmpGm)
+
+		Gm[idxStore,[m,m+1]] .= rhsTmpGm
+
+	end
 	Gm = Gm[idx,:]
-	GmT::Array{Float64} = transpose(Gm)
+	GmT = transpose(Gm)
 
-	itMatCoarse::Array{Float64} = GmT * itMatFull * Gm
+	# Construct the coarse-grid iteration matrix
+	itMatCoarse = GmT * itMatFull * Gm
+	itMatCoarse = lu(itMatCoarse)
 
-	c::Array{Float64} = zeros(N,K+1)
+	# Pre-allocate full Nx1 solutions
+	c = zeros(N,K+1)
 	c[:,1] = par.c0(xF)
 
-	C::Array{Float64} = zeros(M,K+1)
+	# Pre-allocate coarse Mx1 solutions
+	C = zeros(M,K+1)
 	C[:,1] = par.c0(xC)
 
-	phim::Array{Float64} = zeros(totalNodes)
+	# Pre-allocate phi vector
+	phim = zeros(totalNodes)
+
+	# Pre-allocate RHS vectors for the full (stepTmpbFull) NxN problem, and the coarse (stepTmpbCoarse) MxM problem
+	stepTmpbFull = similar(xF)
+	stepTmpbCoarse = similar(xC)
 
 	# Time stepping
-	for k in 1:K
+	@views @inbounds for k in 1:K
 
 		# Construct the phi vector [Equation 26]
-		phim = constructPhi(M,P,tau,itMatLocal,bm,c[:,k],phim)
+		for m in 1:M-1
 
-		b[1] = tau * (b0*g0[k+1] + val0)
-		b[N] = tau * (bL*gL[k+1] + valL)
+			idxGrid = (m-1)*(P-1)+1:m*(P-1)+1
+			idxStore = (m-1)*P+1:m*P
+
+			rhsTmpPhim .= c[idxGrid,k]
+			rhsTmpPhim .+= bmVec[:,m]
+			ldiv!(itMatLocal[m],rhsTmpPhim)
+
+			phim[idxStore] .= rhsTmpPhim
+
+		end
+
+		# Construct the full Nx1 RHS vector
+		stepTmpbFull .= c[:,k] 
+		stepTmpbFull .-= itMatFull * phim[idx]
+		stepTmpbFull .+= bval[:,k+1]
+
+		# Construct the coarse Mx1 RHS vector
+		stepTmpbCoarse .= GmT * stepTmpbFull
 
 		# Approximate solution on the coarse grid [Equation 12]
-		C[:,k+1] = itMatCoarse \ (GmT * (c[:,k] - itMatFull*phim[idx] + b))
+		ldiv!(itMatCoarse,stepTmpbCoarse)
+		C[:,k+1] .= stepTmpbCoarse
 
 		# Reconstruct solution on the fine grid [Equation 11]
-		c[:,k+1] = Gm * C[:,k+1] + phim[idx]
+		stepTmpbFull .= Gm * C[:,k+1]
+		stepTmpbFull .+= phim[idx]
+
+		c[:,k+1] .= stepTmpbFull
 
 	end
 
