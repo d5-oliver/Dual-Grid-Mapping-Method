@@ -59,9 +59,9 @@ idx = setdiff( 1:(N+M-2) , (1:M-2)*P+1 );
 itMatFull = I(1:N,1:N) - tau*A;
 
 % Construct the iteration matrices A [Equation 21] and vectors 
-% b [Equation 23] corresponding to locally defined sub-problems 
+% b, u, and v [Equation 23] corresponding to locally defined sub-problems 
 % [Equations 16-19]
-[Am,bm,dm] = fvmSig(par.R,D,v,mu,Gamma,omega,sigma,xF,xC);
+[Am,bm,uvm] = fvmSig(par.R,D,v,mu,Gamma,omega,sigma,xF,xC);
 itMatm = I - tau*Am;
 
 b0 = b(1);
@@ -77,14 +77,14 @@ for m = 1:M-1
 
     idxStore = (m-1)*P+1:m*P;
 
-    Gm(idxStore,[m,m+1]) = itMatm(idxStore,idxStore) \ ( tau * [dm(1:P,m),dm(2:P+1,m)] );
+    Gm(idxStore,[m,m+1]) = itMatm(idxStore,idxStore) \ ( tau * [uvm(1:P,m),uvm(2:P+1,m)] );
 
 end
 
 itMatCoarse = Gm(idx,:)' * itMatFull * Gm(idx,:);
 
 % Time stepping
-for kk = 1:K
+for k = 1:K
     
     % Construct the phi vector [Equation 26]
     for m = 1:M-1
@@ -93,19 +93,19 @@ for kk = 1:K
 
         idxStore = (m-1)*P+1:m*P;
 
-        phim(idxStore) = itMatm(idxStore,idxStore) \ ( tau*bm(:,m) + c(idxGrid,kk) );
+        phim(idxStore) = itMatm(idxStore,idxStore) \ ( tau*bm(:,m) + c(idxGrid,k) );
 
     end
 
-    b(1) = tau * (b0*g0(kk+1) + val0);
+    b(1) = tau * (b0*g0(k+1) + val0);
 
-    b(N) = tau * (bL*gL(kk+1) + valL);
+    b(N) = tau * (bL*gL(k+1) + valL);
 
     % Approximate solution on the coarse grid [Equation 12]
-    C(:,kk+1) = itMatCoarse \ ( Gm(idx,:)' * ( c(:,kk) - itMatFull * phim(idx) + b ) );
+    C(:,k+1) = itMatCoarse \ ( Gm(idx,:)' * ( c(:,k) - itMatFull * phim(idx) + b ) );
 
     % Reconstruct solution on the fine grid [Equation 11]
-    c(:,kk+1) = Gm(idx,:) * C(:,kk+1) + phim(idx);
+    c(:,k+1) = Gm(idx,:) * C(:,k+1) + phim(idx);
 
 end
 
