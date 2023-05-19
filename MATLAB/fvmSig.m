@@ -19,7 +19,7 @@ P = (N-1) / (M-1) + 1;
 
 A = zeros(N,N);
 b = zeros(P,M-1);
-d = zeros(P+1,M-1);
+uv = zeros(P+1,M-1);
 
 % Utilise a vertex-centered finite volume method to construct local arrays
 % for the problem defined in [Equations 16-19].
@@ -46,7 +46,7 @@ for jj = 1:M-1
     A(idxStore(1),idxStore(1)) = -rho(1) * ( Di(1) + vi(1) * (1 - 0.5*omega) + sigma ) - mui(1)/Ri(1);
     A(idxStore(1),idxStore(2)) = rho(1) * ( Di(1) - vi(1) * 0.5*omega );
 
-    d(1,jj) = rho(1) * sigma;
+    uv(1,jj) = rho(1) * sigma;
 
     % Interior nodes
     for ii = 2:P-1
@@ -61,7 +61,7 @@ for jj = 1:M-1
     A(idxStore(P),idxStore(P-1)) = rho(P) * ( Di(P-1) + vi(P-1) * (1 - 0.5*omega) );
     A(idxStore(P),idxStore(P)) = -rho(P) * ( Di(P-1) - vi(P-1) * 0.5*omega + sigma ) - mui(P)/Ri(P);
 
-    d(end,jj) = rho(P) * sigma;
+    uv(end,jj) = rho(P) * sigma;
 
     % Local b vector
     b(:,jj) = Gammai ./ Ri;
