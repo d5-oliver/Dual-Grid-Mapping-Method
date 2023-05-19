@@ -11,7 +11,7 @@ function constructArrays(R,D,v,mu,Gamma,omega,sigma,xF,xC)
 
 	A = zeros(N+M-2,N+M-2)
 	b = zeros(P,M-1)
-	d = zeros(P,2,M-1)
+	uv = zeros(P,2,M-1)
 
 	# Concatenate local iteration matrices in a single block diagonal matrix
 	@inbounds for m in 1:M-1
@@ -19,11 +19,11 @@ function constructArrays(R,D,v,mu,Gamma,omega,sigma,xF,xC)
 		idxGrid = (m-1)*(P-1)+1:m*(P-1)+1
 		idxStore = (m-1)*P+1:m*P
 
-		A[idxStore,idxStore], b[:,m], d[:,:,m] = fvmSig(P,xF[idxGrid],Ri[idxGrid],D,vi[idxGrid],mui[idxGrid],Gammai[idxGrid],omega,sigma)
+		A[idxStore,idxStore], b[:,m], uv[:,:,m] = fvmSig(P,xF[idxGrid],Ri[idxGrid],D,vi[idxGrid],mui[idxGrid],Gammai[idxGrid],omega,sigma)
 
 	end
 
-	return A, b, d
+	return A, b, uv
 
 end
 
@@ -51,9 +51,9 @@ function fvmSig(P,xF,Ri,D,vi,mui,Gammai,omega,sigma)
 
 	bm = @. Gammai / Ri
 
-	dm = zeros(P,2)
-	dm[1,1] = rho[1] * sigma
-	dm[P,2] = rho[P] * sigma
+	uvm = zeros(P,2)
+	uvm[1,1] = rho[1] * sigma
+	uvm[P,2] = rho[P] * sigma
 
 	# Boundary node x=Xm
 	Am[1,1] = -rho[1] * (Di[1] + vi[1] * (1 - omega/2) + sigma) - mui[1]/Ri[1]
@@ -72,6 +72,6 @@ function fvmSig(P,xF,Ri,D,vi,mui,Gammai,omega,sigma)
 	Am[P,P-1] = rho[P] * (Di[P-1] + vi[P-1] * (1 - omega/2))
 	Am[P,P] = -rho[P] * (Di[P-1] - vi[P-1] * omega/2 + sigma) - mui[P]/Ri[P]
 
-	return Am, bm, dm
+	return Am, bm, uvm
 
 end
