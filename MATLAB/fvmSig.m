@@ -1,4 +1,4 @@
-function [A,b,d] = fvmSig(R,D,v,mu,Gamma,omega,sigma,x,X)
+function [A,b,uv] = fvmSig(R,D,v,mu,Gamma,omega,sigma,x,X)
 %FVMSIG constructs all local arrays Am and bm using the finite volume 
 %method.
 %
