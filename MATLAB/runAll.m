@@ -17,6 +17,7 @@ par.M = 11;
 par.xL = 30;
 
 % Choose time step size. Size of a given time step is tK/K.
+par.t0 = 0;
 par.tK = 18;
 par.K = 3600;
 
