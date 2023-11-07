@@ -1,28 +1,38 @@
-% This code is used to generate maximum absolute difference comparisons 
-% [Figure 3]. To generate new results, comment lines 4-14 of the runAll.m
-% script and set generateNew = true. Otherwise, to simply generate plots,
-% set generateNew = false. To also save the generated figures, set 
-% saveFigs = true.
+% Note: This file is intended to be executed from generateResults.m.
+%
+% This code is used to generate maximum absolute difference comparisons
+% [Figure 3].
 
-clearvars
-close all
-clc
+tic
 
-saveFigs = false;
-generateNew = false;
+cases = [1,2,3,4,5,6,7];
+
+par.xL = 30;
 
 par.N = 3601;
+par.xF = linspace(0,par.xL,par.N);
+
+par.M = 11;
+par.xC = linspace(0,par.xL,par.M);
+
+par.tK = 18;
+par.K = 3600;
+tau = par.tK/par.K;
+
+par.sigma = 1e+10;
+par.omega = 1;
+
+tic
+dummy = 10/3 + 5/7;
+dummy = toc;
 
 if generateNew
 
-    testVals = [3,4,5,6,7,11,13,16,19,21,25,26,31,37,41,46,49,51,73,76,...
-                81,91,101,121,145,151,181,201,226,301,361,401,451,601,...
-                721,901,1201,1801];
+    testVals = [3,4,5,6,7,11,13,16,17,19,21,25,26,31,37,41,46,49,51,61,73,76,81,91,101,121,145,151,181,201,226,241,301,361,401,451,601,721,901,1201,1801];
 
     U = length(testVals);
 
-    testCaseVals = [1,2,3,4,5,6];
-    V = length(testCaseVals);
+    V = length(cases);
 
     errorsDM = zeros(V,U);
     timersDM = zeros(V,U);
@@ -34,38 +44,67 @@ if generateNew
 
     for ii = 1:V
 
-        testCase = testCaseVals(ii);
+        % Generate parameter set for chosen test case
+        testCase = cases(ii);
+        run([topFolder,'\','testCases.m'])
+
+        tic
+        dummy = 10/3 + 5/7;
+        dummy = toc;
+
+        tic
+        c_FVM = FVM(par);
+        timerFVM = toc;
 
         for jj = 1:U
 
+            % Set current no. of coarse-grid nodes
             par.M = testVals(jj);
 
-            run(fullfile(cd,'..','\runAll.m'))
+            % Define coarse grid (xC)
+            par.xC = linspace(0,par.xL,par.M);
 
-            xSteps = ceil(par.N * par.xC / (par.xL - par.x0));
+            % Set location of coarse-grid nodes in fine grid.
+            xSteps = ceil(par.N * par.xC / par.xL);
             xSteps(1) = 1;
 
-            coarseErrorDM = max(abs(c_FVM(xSteps,tSteps) - C_DM(:,tSteps)),[],2);
-            globalErrorDM = max(max(abs(c_FVM(:,tSteps) - c_DM(:,tSteps))));
+            tic
+            dummy = 10/3 + 5/7;
+            dummy = toc;
 
-            coarseErrorIM = max(abs(c_FVM(xSteps,tSteps) - C_IM(:,tSteps)),[],2);
-            globalErrorIM = max(max(abs(c_FVM(:,tSteps) - c_IM(:,tSteps))));
+            tic
+            [C_IM,c_IM] = IM(par);
+            timerIM = toc;
+
+            tic
+            dummy = 10/3 + 5/7;
+            dummy = toc;
+
+            tic
+            [C_DM,c_DM] = DM(par);
+            timerDM = toc;
+
+            coarseErrorDM = max(abs(c_FVM(xSteps,:) - C_DM),[],2);
+            globalErrorDM = max(max(abs(c_FVM - c_DM)));
+
+            coarseErrorIM = max(abs(c_FVM(xSteps,:) - C_IM),[],2);
+            globalErrorIM = max(max(abs(c_FVM - c_IM)));
 
             if par.M == 11
 
                 catErrorDM = [coarseErrorDM; globalErrorDM];
                 catErrorIM = [coarseErrorIM;globalErrorIM];
 
-                save(['case_',num2str(testCase),'_approx.mat'],'c_FVM','C_DM','c_DM','C_IM','c_IM')
-                save(['case_',num2str(testCase),'_abs_differences.mat'],'catErrorDM','catErrorIM')
+                save([bottomFolder,'\','case_',num2str(testCase),'_approx.mat'],'c_FVM','C_DM','c_DM','C_IM','c_IM')
+                save([bottomFolder,'\','case_',num2str(testCase),'_abs_differences.mat'],'catErrorDM','catErrorIM')
 
             end
 
             errorsDM(ii,jj) = globalErrorDM;
-            timersDM(ii,jj) = timerLocal;
+            timersDM(ii,jj) = timerDM;
 
             errorsIM(ii,jj) = globalErrorIM;
-            timersIM(ii,jj) = timerInterp;
+            timersIM(ii,jj) = timerIM;
 
             timersFVM(ii,jj) = timerFVM;
 
@@ -75,43 +114,43 @@ if generateNew
 
     end
 
-    save('errorsTimers.mat','testVals','testCaseVals','errorsDM','timersDM','errorsIM','timersIM','timersFVM')
+    save([bottomFolder,'\','errorsTimers.mat'],'testVals','cases','errorsDM','timersDM','errorsIM','timersIM','timersFVM')
 
 else
 
-    load('errorsTimers.mat')
+    load([bottomFolder,'\','errorsTimers.mat'])
 
     U = length(testVals);
-    V = length(testCaseVals);
+    V = length(cases);
 
 end
 
 %% Set plot colours
 
 cols = [
-        0.6235    0.6549    0.6784
-        0.1373    0.1529    0.1608
-        0.0863    0.4431    0.8510
-        0.7098    0.0353    0.0471
-       ];
+    0.6235    0.6549    0.6784
+    0.1373    0.1529    0.1608
+    0.0863    0.4431    0.8510
+    0.7098    0.0353    0.0471
+    ];
 
 %% Define error and timer values from local files or freshly generated data
 
-avgErrorValsDM = mean(errorsDM);
-errorQuantilesDM = quantile(errorsDM,[0,1]);
-avgTimerValsDM = mean(timersDM);
-timerQuantilesDM = quantile(timersDM,[0,1]);
+avgErrorValsDM = mean(errorsDM(1:end-1,:));
+errorQuantilesDM = quantile(errorsDM(1:end-1,:),[0,1]);
+avgTimerValsDM = mean(timersDM(1:end-1,:));
+timerQuantilesDM = quantile(timersDM(1:end-1,:),[0,1]);
 [minTimer,minIdx] = min(avgTimerValsDM);
 minNodes = testVals(minIdx);
 minError = avgErrorValsDM(minIdx);
 
-avgErrorValsIM = mean(errorsIM);
-errorQuantilesIM = quantile(errorsIM,[0,1]);
-avgTimerValsIM = mean(timersIM);
-timerQuantilesIM = quantile(timersIM,[0,1]);
+avgErrorValsIM = mean(errorsIM(1:end-1,:));
+errorQuantilesIM = quantile(errorsIM(1:end-1,:),[0,1]);
+avgTimerValsIM = mean(timersIM(1:end-1,:));
+timerQuantilesIM = quantile(timersIM(1:end-1,:),[0,1]);
 
-avgTimerValsFVM = mean(timersFVM);
-timerQuantilesFVM = quantile(timersFVM,[0,1]);
+avgTimerValsFVM = mean(timersFVM(1:end-1,:));
+timerQuantilesFVM = quantile(timersFVM(1:end-1,:),[0,1]);
 
 %% Generate maximum abs. difference plot
 
@@ -127,7 +166,7 @@ plot(testVals,avgErrorValsDM,'Color',cols(3,:),'LineWidth',10)
 
 plot(minNodes,minError,'o','Color',cols(2,:),'MarkerSize',16,'MarkerFaceColor',cols(2,:))
 
-tickValues = (par.N-1) ./ [1800,900,600,360,180,120,60,30,18,8,4,2] + 1;
+tickValues = (par.N - 1) ./ ([1801,901,601,361,181,121,61,31,19,9,5,3] - 1) + 1;
 
 xlim([min(testVals),max(testVals)])
 ylim([1e-8,1e-0])
@@ -141,7 +180,7 @@ xtickangle(0)
 
 if saveFigs
 
-    print('Errors.eps','-depsc2','-r300','-vector')
+    print([midFolder,'\','Errors.eps'],'-depsc2','-r300','-vector')
 
 end
 
@@ -151,7 +190,7 @@ figure
 hold on
 box on
 
-fill([testVals,testVals(end:-1:1)],[timerQuantilesFVM(1,:),timerQuantilesFVM(2,end:-1:1)],cols(1,:),'FaceAlpha',0.25,'EdgeColor','none')
+%fill([testVals,testVals(end:-1:1)],[timerQuantilesFVM(1,:),timerQuantilesFVM(2,end:-1:1)],cols(1,:),'FaceAlpha',0.25,'EdgeColor','none')
 fill([testVals,testVals(end:-1:1)],[timerQuantilesIM(1,:),timerQuantilesIM(2,end:-1:1)],cols(4,:),'FaceAlpha',0.25,'EdgeColor','none')
 fill([testVals,testVals(end:-1:1)],[timerQuantilesDM(1,:),timerQuantilesDM(2,end:-1:1)],cols(3,:),'FaceAlpha',0.25,'EdgeColor','none')
 
@@ -164,8 +203,8 @@ plot(testVals,avgTimerValsDM,'Color',cols(3,:),'LineWidth',10)
 plot(minNodes,minTimer,'o','Color',cols(2,:),'MarkerSize',16,'MarkerFaceColor',cols(2,:))
 
 xlim([min(testVals),max(testVals)])
-ylim([0,325])
-set(gca,'YTick',0:25:325,'XScale','log','XTick',tickValues,'XTickLabel',tickValues,'XMinorTick','off','FontSize',38,'TickLabelInterpreter','latex','fontweight','bold','Layer','top','Clipping','on','ClippingStyle','rectangle')
+ylim([0,400])
+set(gca,'YTick',0:50:400,'XScale','log','XTick',tickValues,'XTickLabel',tickValues,'XMinorTick','off','FontSize',38,'TickLabelInterpreter','latex','fontweight','bold','Layer','top','Clipping','on','ClippingStyle','rectangle')
 ylabel('Runtime [s]','Interpreter','latex','FontSize',46,'fontweight','bold')
 xlabel('$M$','Interpreter','latex','FontSize',44,'fontweight','bold')
 
@@ -175,7 +214,7 @@ xtickangle(0)
 
 if saveFigs
 
-    print('Runtimes.eps','-depsc2','-r300','-vector')
+    print([midFolder,'\','Runtimes.eps'],'-depsc2','-r300','-vector')
 
 end
 
@@ -195,7 +234,7 @@ set(gcf,'Position',get(gcf,'Position')+[100,100,0,0],'Renderer','painters')
 
 if saveFigs
 
-    print('Legend_Plots.eps','-depsc2','-r300','-vector')
+    print([midFolder,'\','Legend_Plots.eps'],'-depsc2','-r300','-vector')
 
 end
 
@@ -213,6 +252,6 @@ set(gcf,'Position',get(gcf,'Position')+[100,100,0,0],'Renderer','painters')
 
 if saveFigs
 
-    print('Legend_Runtimes.eps','-depsc2','-r300','-vector')
+    print([midFolder,'\','Legend_Runtimes.eps'],'-depsc2','-r300','-vector')
 
 end
