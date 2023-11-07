@@ -3,48 +3,43 @@
 %% Clear workspace, figures, and command window
 close all
 clearvars
-commandwindow; clc;
+clc
 
 %% Choose solution and domain parameters
 % Select test case (choices match figures, testCase = 1, 2, ..., 6)
-testCase = 6;
+testCase = 7;
 
 % Choose number of spatial fine and coarse grid nodes.
 par.N = 3601;
 par.M = 11;
 
-% Choose to generate/save figures
-plotFigs = true;
-saveFigs = false;
-
-% Set domain, par.x0 <= x <= par.xL
-par.x0 = 0;
+% Set domain, 0 <= x <= xL
 par.xL = 30;
 
-% Choose time step size. Size of a given time step is (tM - t0)/Nt.
-par.t0 = 0;
+% Choose time step size. Size of a given time step is tK/K.
 par.tK = 18;
 par.K = 3600;
 
 % Generate parameter set for chosen test case
 run('testCases.m')
 
-% Define fine grid (par.xF) and coarse grid (par.xC)
-par.xF = linspace(par.x0,par.xL,par.N);
-
 % If test case is a layered problem, ensure a node is placed on interfaces
 if ismember(testCase,[1,2,3,4])
-    while any(setdiff(layers(2:end-1,1),par.xF))
+    while any(mod(layers(:,1),par.xL/(par.N - 1)))
         par.N = par.N + 1;
-        par.xF = linspace(par.x0,par.xL,par.N);
     end
 end
 
+% Define fine grid (xF)
+par.xF = linspace(0,par.xL,par.N);
+
 % Ensure coarse grid is a subset of fine grid nodes.
-while mod( (par.N-1)/(par.M-1) , 1 ) > 0
+while mod( (par.N - 1)/(par.M - 1) , 1 ) > 0
     par.M = par.M + 1;
 end
-par.xC = linspace(par.x0,par.xL,par.M);
+
+% Define coarse grid (xC)
+par.xC = linspace(0,par.xL,par.M);
 
 % Choose approximate-Dirichlet boundary condition scalar (see Equations 21
 % and 22 in paper)
@@ -55,6 +50,10 @@ par.sigma = 1e+10;
 % omega = 1 corresponds to averaging.
 % omega = 0 corresponds to upwinding.
 par.omega = 1;
+
+% Choose to generate/save figures
+plotFigs = false;
+saveFigs = false;
 
 %% Evaluation of different solution methods
 
@@ -90,17 +89,17 @@ if plotFigs
     box on
 
     % Fine grid solution plots, from both FVM and dual-grid (DM) methods
-    for kk = 1:length(tSteps)
-        plot(par.xF,c_FVM(:,tSteps(kk)),'Color',cols(1,:),'LineWidth',10)
-        plot(par.xF,c_DM(:,tSteps(kk)),'--','Color',cols(2,:),'LineWidth',10)
+    for kk = tSteps
+        plot(par.xF,c_FVM(:,kk),'Color',cols(1,:),'LineWidth',10)
+        plot(par.xF,c_DM(:,kk),'--','Color',cols(2,:),'LineWidth',10)
     end
 
     % Coarse-grid solutions are plotted above fine-grid solutions for clarity
-    for kk = 1:length(tSteps)
-        plot(par.xC,C_DM(:,tSteps(kk)),'o','Color',cols(3,:),'MarkerFaceColor',cols(3,:),'LineWidth',10,'MarkerSize',14)
+    for kk = tSteps
+        plot(par.xC,C_DM(:,kk),'o','Color',cols(3,:),'MarkerFaceColor',cols(3,:),'LineWidth',10,'MarkerSize',14)
     end
 
-    xlim([par.x0,par.xL])
+    xlim([0,par.xL])
     ylim([-0.01,1.01])
     set(gca,'FontSize',38,'TickLabelInterpreter','latex','Layer','top')
     xlabel('$x$','Interpreter','latex','FontSize',44)
@@ -108,7 +107,6 @@ if plotFigs
     set(gcf,'position',[25,25,1600,900],'Renderer','painters')
 
     if saveFigs
-        saveas(gcf,['Case',num2str(testCase),'.fig'])
         print(['Case',num2str(testCase),'.eps'],'-depsc2','-r300','-vector')
     end
 
