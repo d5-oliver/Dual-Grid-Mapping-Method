@@ -15,7 +15,7 @@ include("par.jl")
 
 function runAll()
 
-	testCase = 5
+	testCase = 7
 
 	layers = setLayers(testCase)
 
