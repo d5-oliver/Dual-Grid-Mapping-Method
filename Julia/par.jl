@@ -126,7 +126,7 @@ function constructPar(x0, xL, T, N, xF, M, xC, K, omega, sigma, testCase, layers
 
 		c0 = x -> zeros(size(x))
 
-		tSteps = round.(K*[0.1,1,2,6,10,14,18]/T)
+		tSteps = round.(K*[0.1,1,2,6,10,14,18]/T) .+ 1
 
 	elseif (testCase == 2)
 
@@ -151,7 +151,7 @@ function constructPar(x0, xL, T, N, xF, M, xC, K, omega, sigma, testCase, layers
 
 		c0 = x -> zeros(size(x))
 
-		tSteps = round.(K*[0.1,1,2,6,10,14,18]/T)
+		tSteps = round.(K*[0.1,1,2,6,10,14,18]/T) .+ 1
 
 	elseif (testCase == 3)
 
@@ -176,7 +176,7 @@ function constructPar(x0, xL, T, N, xF, M, xC, K, omega, sigma, testCase, layers
 
 		c0 = x -> zeros(size(x))
 
-		tSteps = round.(K*[0.1,1,2,6,10,14,18]/T)
+		tSteps = round.(K*[0.1,1,2,6,10,14,18]/T) .+ 1
 
 	elseif (testCase == 4)
 
@@ -201,7 +201,7 @@ function constructPar(x0, xL, T, N, xF, M, xC, K, omega, sigma, testCase, layers
 
 		c0 = x -> zeros(size(x))
 
-		tSteps = round.(K*[0.1,1,2,6,10,14,18]/T)
+		tSteps = round.(K*[0.1,1,2,6,10,14,18]/T) .+ 1
 
 	elseif (testCase == 5)
 
@@ -226,7 +226,7 @@ function constructPar(x0, xL, T, N, xF, M, xC, K, omega, sigma, testCase, layers
 
 		c0 = x -> zeros(size(x))
 
-		tSteps = round.(K*([0.1,1,2,6,10,14,18]/10)/T)
+		tSteps = round.(K*([0.1,1,2,6,10,14,18]/10)/T) .+ 1
 
 	elseif (testCase == 6)
 
@@ -252,7 +252,32 @@ function constructPar(x0, xL, T, N, xF, M, xC, K, omega, sigma, testCase, layers
 
 		c0 = x -> zeros(size(x))
 
-		tSteps = round.(K*[0.1,0.4,0.9,2,4,5,6]/T)
+		tSteps = round.(K*[0.1,0.4,0.9,2,4,5,6]/T) .+ 1
+
+	elseif (testCase == 7)
+
+		tau =  T/K
+		t =  0:tau:T
+
+		R = x -> layerEval(x,layers,2)
+		D = x -> layerEval(x,layers,4)
+		v = x -> layerEval(x,layers,3)
+		mu = x -> layerEval(x,layers,5)
+		Gamma = x -> layerEval(x,layers,6)
+
+		alpha0 = v(x0) .- 1
+		beta0 = D(x0)
+		sigma0 = 1
+		g0 = t -> v(x0)*ones(size(t))
+
+		alphaL = v(xL)
+		betaL = D(xL)
+		sigmaL = v(xL)
+		gL = t -> zeros(size(t))
+
+		c0 = x -> zeros(size(x))
+
+        tSteps = round.(K*[0.005,0.05,0.1,0.12,0.15,0.2,0.25]/T) .+ 1
 
 	end
 
